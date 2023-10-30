@@ -1,6 +1,11 @@
 from util.modelo_mecanicista import PredecirPSAOneDosis
 import pandas as pd
 import numpy as np
+import optuna
+from sklearn.manifold import TSNE
+from sklearn.cluster import SpectralClustering
+from sklearn.metrics import v_measure_score
+
 
 class Sistema(PredecirPSAOneDosis):
 
@@ -94,3 +99,27 @@ class Sistema(PredecirPSAOneDosis):
                            'gg2':lista_gg2})
         
         return df, y, df_tiempos
+
+
+    def tsne_spectralclustering(self, X, p, n):
+        tsne = TSNE(n_components=2, random_state=0, perplexity=p)
+        clusterizado = SpectralClustering(n_clusters=n)
+        X_tsne = tsne.fit_transform(self.X)
+        y_clust = clusterizado.fit_predict(X_tsne)
+        return X_tsne, y_clust
+    
+    def optuna_tsne_spectralclustering(self, trial):
+        tsne_p  = trial.suggest_int("tsne_p", 10, 100)
+        clust_n = trial.suggest_int("clust_n", 2, 10)
+        _, y_clust = self.tsne_spectralclustering(self.X, tsne_p,clust_n)
+        return v_measure_score(self.y_optuna.iloc[:,1], y_clust)
+
+    def optimizar_tsne_spectralclustering(self, X, y):
+        self.X_optuna = X.copy()
+        self.y_optuna = y.copy()
+
+        study = optuna.create_study(direction="maximize")
+        study.optimize(self.optuna_tsne_spectralclustering, n_trials=150, show_progress_bar=True, timeout=300) #show_progress_bar=True  #n_jobs=-1, 
+
+        return study.best_params, study.best_value, study.best_trial
+    
